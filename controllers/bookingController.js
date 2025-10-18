@@ -1,34 +1,41 @@
 import Booking from "../models/bookingmodel.js";
 import sgMail from "@sendgrid/mail";
 
-// Initialize SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
+// ✅ Create a new booking
 export const createBooking = async (req, res) => {
   try {
-    // Save booking
     const booking = new Booking(req.body);
     await booking.save();
 
-    // Customer email
-    const customerEmail = {
+    // ✅ Setup SendGrid
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+    console.log("Sending emails via SendGrid...");
+
+    const customerMail = {
       to: booking.email,
-      from: process.env.EMAIL_USER, // Must be verified in SendGrid
+      from: {
+        email: process.env.EMAIL_USER,
+        name: "Event Booking Team",
+      },
       subject: "Booking Confirmation - Thank you!",
       html: `
         <h2>Thank you for your booking, ${booking.fullName}!</h2>
-        <p>We have received your booking for <b>${booking.eventType}</b> on <b>${new Date(booking.date).toDateString()}</b>.</p>
-        <p><b>Venue:</b> ${booking.venue}</p>
+        <p>We have received your booking for <b>${booking.eventType}</b> on <b>${new Date(
+          booking.date
+        ).toDateString()}</b>.</p>
+        <p>Venue: ${booking.venue}</p>
         <p>We will contact you soon for further details.</p>
         <br>
         <p>Best regards,<br>Event Team</p>
       `,
     };
 
-    // Admin email
-    const adminEmail = {
+    const adminMail = {
       to: process.env.ADMIN_EMAIL,
-      from: process.env.EMAIL_USER,
+      from: {
+        email: process.env.EMAIL_USER,
+        name: "Event Booking System",
+      },
       subject: `New Booking from ${booking.fullName}`,
       html: `
         <h3>New Booking Details:</h3>
@@ -42,41 +49,41 @@ export const createBooking = async (req, res) => {
       `,
     };
 
-    // Send both emails
-    console.log("📧 Sending emails via SendGrid...");
-    
-    try {
-      await sgMail.send(customerEmail);
-      console.log("✅ Customer email sent");
-    } catch (error) {
-      console.error("❌ Customer email error:", error.response?.body || error.message);
-    }
+    // ✅ Send both emails
+    await Promise.all([
+      sgMail
+        .send(customerMail)
+        .then(() => console.log("Customer email sent"))
+        .catch((err) => {
+          console.error("Customer email error:", err.response?.body || err);
+        }),
+      sgMail
+        .send(adminMail)
+        .then(() => console.log("Admin email sent"))
+        .catch((err) => {
+          console.error("Admin email error:", err.response?.body || err);
+        }),
+    ]);
 
-    try {
-      await sgMail.send(adminEmail);
-      console.log("✅ Admin email sent");
-    } catch (error) {
-      console.error("❌ Admin email error:", error.response?.body || error.message);
-    }
-
-    res.status(201).json({ 
-      message: "Booking submitted successfully!" 
+    res.status(201).json({
+      message: "Booking submitted successfully!",
     });
-
   } catch (error) {
-    console.error("❌ Error:", error);
-    res.status(500).json({ 
-      message: "Error processing booking", 
-      error: error.message 
+    console.error("Booking error:", error.message);
+    res.status(500).json({
+      message: "Error processing booking",
+      error: error.message,
     });
   }
 };
 
+// ✅ Get all bookings (for admin)
 export const getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
     res.json(bookings);
   } catch (error) {
+    console.error("Error fetching bookings:", error.message);
     res.status(500).json({ message: "Error fetching bookings", error });
   }
 };
