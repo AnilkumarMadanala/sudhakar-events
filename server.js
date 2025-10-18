@@ -1,6 +1,6 @@
+import dotenv from 'dotenv';
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import mongoose from "mongoose";
 import bookingRoutes from "./routes/bookingRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
@@ -8,8 +8,11 @@ import { protect } from "./middleware/authMiddleware.js";
 import Booking from "./models/bookingmodel.js"; // ✅ make sure "M" is uppercase and matches the file name exactly
 
 // Load environment variables
-dotenv.config();
-
+dotenv.config(); // FIRST!
+// Then debug logs
+console.log("🧩 EMAIL_USER:", process.env.EMAIL_USER);
+console.log("🧩 EMAIL_PASS:", process.env.EMAIL_PASS ? "Loaded ✅" : "❌ Missing");
+console.log("🧩 ADMIN_EMAIL:", process.env.ADMIN_EMAIL);
 const app = express();
 
 // Middleware

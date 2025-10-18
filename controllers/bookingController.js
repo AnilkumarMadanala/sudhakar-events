@@ -1,47 +1,24 @@
 import Booking from "../models/bookingmodel.js";
-import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 
-// Create transporter with Gmail SMTP
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, // must be App Password
-  },
-});
-
-transporter.verify((err, success) => {
-  if (err) {
-    console.error("Error verifying transporter:", err);
-  } else {
-    console.log("Email transporter is ready ✅");
-  }
-});
-
-transporter.verify((err, success) => {
-  if (err) {
-    console.error("Error verifying transporter:", err);
-  } else {
-    console.log("Email transporter is ready");
-  }
-});
+// Initialize SendGrid
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 export const createBooking = async (req, res) => {
   try {
+    // Save booking
     const booking = new Booking(req.body);
     await booking.save();
 
     // Customer email
-    const customerMailOptions = {
-      from: process.env.EMAIL_USER,
+    const customerEmail = {
       to: booking.email,
+      from: process.env.EMAIL_USER, // Must be verified in SendGrid
       subject: "Booking Confirmation - Thank you!",
       html: `
         <h2>Thank you for your booking, ${booking.fullName}!</h2>
         <p>We have received your booking for <b>${booking.eventType}</b> on <b>${new Date(booking.date).toDateString()}</b>.</p>
-        <p>Venue: ${booking.venue}</p>
+        <p><b>Venue:</b> ${booking.venue}</p>
         <p>We will contact you soon for further details.</p>
         <br>
         <p>Best regards,<br>Event Team</p>
@@ -49,10 +26,10 @@ export const createBooking = async (req, res) => {
     };
 
     // Admin email
-    const adminMailOptions = {
-      from: process.env.EMAIL_USER,
+    const adminEmail = {
       to: process.env.ADMIN_EMAIL,
-      subject: `New Booking Received from ${booking.fullName}`,
+      from: process.env.EMAIL_USER,
+      subject: `New Booking from ${booking.fullName}`,
       html: `
         <h3>New Booking Details:</h3>
         <p><b>Name:</b> ${booking.fullName}</p>
@@ -65,34 +42,36 @@ export const createBooking = async (req, res) => {
       `,
     };
 
-    // Debug logs
-    console.log("Sending emails from:", process.env.EMAIL_USER);
-    console.log("Customer email:", booking.email);
-    console.log("Admin email:", process.env.ADMIN_EMAIL);
-
-    // Send both emails with proper try/catch for each
+    // Send both emails
+    console.log("📧 Sending emails via SendGrid...");
+    
     try {
-      const customerResult = await transporter.sendMail(customerMailOptions);
-      console.log("Customer email sent:", customerResult.response);
-
-      const adminResult = await transporter.sendMail(adminMailOptions);
-      console.log("Admin email sent:", adminResult.response);
-    } catch (emailError) {
-      console.error("Error sending emails:", emailError);
-      return res.status(500).json({
-        message: "Booking saved but failed to send emails",
-        error: emailError.toString(),
-      });
+      await sgMail.send(customerEmail);
+      console.log("✅ Customer email sent");
+    } catch (error) {
+      console.error("❌ Customer email error:", error.response?.body || error.message);
     }
 
-    res.status(201).json({ message: "Booking submitted successfully and emails sent!" });
+    try {
+      await sgMail.send(adminEmail);
+      console.log("✅ Admin email sent");
+    } catch (error) {
+      console.error("❌ Admin email error:", error.response?.body || error.message);
+    }
+
+    res.status(201).json({ 
+      message: "Booking submitted successfully!" 
+    });
+
   } catch (error) {
-    console.error("Error saving booking:", error);
-    res.status(500).json({ message: "Error saving booking", error });
+    console.error("❌ Error:", error);
+    res.status(500).json({ 
+      message: "Error processing booking", 
+      error: error.message 
+    });
   }
 };
 
-// Get all bookings (for admin)
 export const getAllBookings = async (req, res) => {
   try {
     const bookings = await Booking.find().sort({ createdAt: -1 });
